@@ -8,13 +8,18 @@
 
 import UIKit
 
-class ViewController: UIViewController {
+class ViewController: UIViewController, BluetoothManagerDelegate {
 
     @IBOutlet weak var modeLabel: UILabel!
+    
+    private var bluetoothManager: BluetoothManager!
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
+        
+        bluetoothManager = BluetoothManager()
+        bluetoothManager.delegate = self
     }
 
     override func didReceiveMemoryWarning() {
@@ -23,7 +28,11 @@ class ViewController: UIViewController {
     }
 
     @IBAction func startEnroll(sender: AnyObject) {
-        println("startEnroll")
+        bluetoothManager.startEnroll()
+    }
+    
+    func startedAdvertisingService(service: String) {
+        modeLabel.text = service
     }
 
 }
