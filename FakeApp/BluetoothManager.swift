@@ -10,7 +10,8 @@ import Foundation
 import CoreBluetooth
 
 protocol BluetoothManagerDelegate {
-    func startedAdvertisingService(service: String)
+    func addedService(service: String)
+    func removedService(service: String)
 }
 
 class BluetoothManager: NSObject {
@@ -19,43 +20,56 @@ class BluetoothManager: NSObject {
     private let enrollInputCharacteristicUUID  = CBUUID(string: "40A70AAD-6E05-4EBD-B9DB-2010DC412881")
     private let enrollOutputCharacteristicUUID = CBUUID(string: "AC103510-5E49-41C5-94DA-CBA4329A6CF5")
     
-    private var authServiceUUID                = CBUUID(string: "1012A197-B767-421C-B49C-10F385BA22E1")
+    private let authServiceUUID                = CBUUID(string: "1012A197-B767-421C-B49C-10F385BA22E1")
     private let authInputCharacteristicUUID    = CBUUID(string: "E11C666D-A68C-4775-A05E-2765830D5D60")
     private let authOutputCharacteristicUUID   = CBUUID(string: "BEDFA15A-9048-4ABD-8455-6E164F4878E3")
     
     private var currentServiceUUID: CBUUID!
     
-    private let peripheralManager: CBPeripheralManager!
+    private let enrollService: CBMutableService
+    private let authService: CBMutableService
+    
+    private var peripheralManager: CBPeripheralManager!
+    
     private var isPoweredOn = false
     
-    private var pendingResponse: String!
+    private var pendingResponse = ""
     
     var delegate: BluetoothManagerDelegate?
     
     override init() {
+        var inputCharacteristic: CBMutableCharacteristic
+        var outputCharacteristic: CBMutableCharacteristic
+        
+        enrollService = CBMutableService(type: enrollServiceUUID, primary: true)
+        inputCharacteristic = CBMutableCharacteristic(
+            type: enrollInputCharacteristicUUID,
+            properties: CBCharacteristicProperties.Write,
+            value: nil,
+            permissions: CBAttributePermissions.Writeable)
+        outputCharacteristic = CBMutableCharacteristic(
+            type: enrollOutputCharacteristicUUID,
+            properties: CBCharacteristicProperties.Read,
+            value: nil,
+            permissions: CBAttributePermissions.Readable)
+        enrollService.characteristics = [inputCharacteristic, outputCharacteristic]
+        
+        authService = CBMutableService(type: authServiceUUID, primary: true)
+        inputCharacteristic = CBMutableCharacteristic(
+            type: authInputCharacteristicUUID,
+            properties: CBCharacteristicProperties.Write,
+            value: nil,
+            permissions: CBAttributePermissions.Writeable)
+        outputCharacteristic = CBMutableCharacteristic(
+            type: authOutputCharacteristicUUID,
+            properties: CBCharacteristicProperties.Read,
+            value: nil,
+            permissions: CBAttributePermissions.Readable)
+        authService.characteristics = [inputCharacteristic, outputCharacteristic]
+        
         super.init()
-        currentServiceUUID = enrollServiceUUID
-        pendingResponse = ""
+        
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
-    }
-    
-    func startEnroll() {
-        log("startEnroll")
-        if isPoweredOn {
-            startService(enrollServiceUUID)
-        } else {
-            log("is not powered on")
-        }
-    }
-
-    private func timestamp() -> String {
-        let dateFormatter = NSDateFormatter()
-        dateFormatter.dateFormat = "YYYY-MM-dd HH:mm:ss.SSS"
-        return dateFormatter.stringFromDate(NSDate())
-    }
-    
-    private func log(message: String) {
-        println("[\(timestamp())] \(message)")
     }
     
     private func nameFromUUID(uuid: CBUUID) -> String {
@@ -70,35 +84,44 @@ class BluetoothManager: NSObject {
         }
     }
     
-    private func startService(serviceUUID: CBUUID) {
-        log("startService \(nameFromUUID(serviceUUID))")
+    func startEnroll() {
+        log("startEnroll")
+        if isPoweredOn {
+            addService(enrollServiceUUID)
+        } else {
+            log("not powered on")
+        }
+    }
+
+    private func addService(serviceUUID: CBUUID) {
+        log("addService \(nameFromUUID(serviceUUID))")
+        if currentServiceUUID != nil && serviceUUID == currentServiceUUID {
+            log("don't need to add service -- it is current service")
+            return
+        }
         currentServiceUUID = serviceUUID
-        peripheralManager.stopAdvertising()
-        peripheralManager.removeAllServices()
-        let service = CBMutableService(type: serviceUUID, primary: true)
-        let inputCharacteristic = CBMutableCharacteristic(
-            type: serviceUUID == enrollServiceUUID ? enrollInputCharacteristicUUID : authInputCharacteristicUUID,
-            properties: CBCharacteristicProperties.Write,
-            value: nil,
-            permissions: CBAttributePermissions.Writeable)
-        let outputCharacteristic = CBMutableCharacteristic(
-            type: serviceUUID == enrollServiceUUID ? enrollOutputCharacteristicUUID : authOutputCharacteristicUUID,
-            properties: CBCharacteristicProperties.Read,
-            value: nil,
-            permissions: CBAttributePermissions.Readable)
-        service.characteristics = [inputCharacteristic, outputCharacteristic]
-        peripheralManager.addService(service)
+        peripheralManager.addService(serviceUUID == enrollServiceUUID ? enrollService : authService)
+        delegate?.addedService(serviceUUID == enrollServiceUUID ? "Enroll" : "Auth")
+    }
+    
+    private func removeService(serviceUUID: CBUUID) {
+        log("removeService \(nameFromUUID(serviceUUID))")
+        if serviceUUID == currentServiceUUID {
+            log("can't remove service -- it is current service")
+            return
+        }
+        peripheralManager.removeService(serviceUUID == enrollServiceUUID ? enrollService : authService)
+        delegate?.removedService(serviceUUID == enrollServiceUUID ? "Enroll" : "Auth")
     }
     
     private func startAdvertising() {
         log("startAdvertising")
         peripheralManager.startAdvertising(nil) // [CBAdvertisementDataServiceUUIDsKey: [currentServiceUUID]])
-        delegate?.startedAdvertisingService(currentServiceUUID == enrollServiceUUID ? "Enroll" : "Auth")
     }
     
     private func processRequest(requestData: NSData) {
         let request = NSString(data: requestData, encoding: NSUTF8StringEncoding)!
-        log("request received: " + request)
+        log("request received: " + (request as String))
         let response = "\(request) (\(timestamp()))"
         log("pending response: " + response)
         pendingResponse = response
@@ -129,19 +152,8 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         log("peripheralManagerDidUpdateState \(caseString)")
         isPoweredOn = (peripheralManager.state == .PoweredOn)
         if isPoweredOn {
-            startService(enrollServiceUUID)
-        }
-    }
-    
-    func peripheralManager(peripheral: CBPeripheralManager!, didAddService service: CBService!, error: NSError!) {
-        var message = "peripheralManager didAddService \(nameFromUUID(service.UUID)) "
-        if error == nil {
-            message += "ok"
-            log(message)
-            startAdvertising()
-        } else {
-            message = "error " + error.localizedDescription
-            log(message)
+            // peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [currentServiceUUID]])
+            peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [enrollServiceUUID, authServiceUUID]])
         }
     }
     
@@ -149,10 +161,22 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         var message = "peripheralManagerDidStartAdvertising "
         if error == nil {
             message += "ok"
+            addService(enrollServiceUUID)
         } else {
-            message = "error " + error.localizedDescription
+            message += "error " + error.localizedDescription
         }
         log(message)
+    }
+    
+    func peripheralManager(peripheral: CBPeripheralManager!, didAddService service: CBService!, error: NSError!) {
+        var message = "peripheralManager didAddService \(nameFromUUID(service.UUID)) "
+        if error == nil {
+            message += "ok"
+            log(message)
+        } else {
+            message += "error " + error.localizedDescription
+            log(message)
+        }
     }
     
     func peripheralManager(peripheral: CBPeripheralManager!, didReceiveWriteRequests requests: [AnyObject]!) {
@@ -160,7 +184,7 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         if requests.count == 0 {
             return
         }
-        let request = requests[0] as CBATTRequest
+        let request = requests[0] as! CBATTRequest
         processRequest(request.value)
         peripheralManager.respondToRequest(request, withResult: CBATTError.Success)
     }

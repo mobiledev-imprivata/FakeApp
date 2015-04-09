@@ -31,9 +31,18 @@ class ViewController: UIViewController, BluetoothManagerDelegate {
         bluetoothManager.startEnroll()
     }
     
-    func startedAdvertisingService(service: String) {
-        modeLabel.text = service
-    }
 
+}
+
+extension ViewController: BluetoothManagerDelegate {
+    
+    func addedService(service: String) {
+        log("addedService \(service)")
+    }
+    
+    func removedService(service: String) {
+        log("removedService \(service)")
+    }
+    
 }
 
