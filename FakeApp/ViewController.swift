@@ -26,22 +26,21 @@ class ViewController: UIViewController, BluetoothManagerDelegate {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
     }
-
-    @IBAction func startEnroll(sender: AnyObject) {
+    
+    @IBAction func enroll(sender: AnyObject) {
         bluetoothManager.startEnroll()
     }
-    
 
+    @IBAction func auth(sender: AnyObject) {
+        bluetoothManager.startAuth()
+    }
+    
 }
 
 extension ViewController: BluetoothManagerDelegate {
     
-    func addedService(service: String) {
-        log("addedService \(service)")
-    }
-    
-    func removedService(service: String) {
-        log("removedService \(service)")
+    func updateState(state: BluetoothManager.State) {
+        modeLabel.text = state.description
     }
     
 }

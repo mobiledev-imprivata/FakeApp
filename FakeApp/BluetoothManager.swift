@@ -10,11 +10,23 @@ import Foundation
 import CoreBluetooth
 
 protocol BluetoothManagerDelegate {
-    func addedService(service: String)
-    func removedService(service: String)
+    func updateState(state: BluetoothManager.State)
 }
 
 class BluetoothManager: NSObject {
+    
+    enum State: Printable {
+        case Idle, Enroll, Auth, Both
+        
+        var description: String {
+            switch self {
+            case .Idle: return "Idle"
+            case .Enroll: return "Enroll"
+            case .Auth: return "Auth"
+            case .Both: return "Both"
+            }
+        }
+    }
     
     private let enrollServiceUUID              = CBUUID(string: "80CBFCD9-C13A-4817-8921-349F3702A4D0")
     private let enrollInputCharacteristicUUID  = CBUUID(string: "40A70AAD-6E05-4EBD-B9DB-2010DC412881")
@@ -24,14 +36,19 @@ class BluetoothManager: NSObject {
     private let authInputCharacteristicUUID    = CBUUID(string: "E11C666D-A68C-4775-A05E-2765830D5D60")
     private let authOutputCharacteristicUUID   = CBUUID(string: "BEDFA15A-9048-4ABD-8455-6E164F4878E3")
     
-    private var currentServiceUUID: CBUUID!
-    
     private let enrollService: CBMutableService
     private let authService: CBMutableService
     
     private var peripheralManager: CBPeripheralManager!
     
     private var isPoweredOn = false
+    
+    private var state: State = .Idle {
+        didSet {
+            log("state changed to \(state.description)")
+            delegate?.updateState(state)
+        }
+    }
     
     private var pendingResponse = ""
     
@@ -85,46 +102,81 @@ class BluetoothManager: NSObject {
     }
     
     func startEnroll() {
-        log("startEnroll")
+        log("startEnroll in state \(state.description)")
         if isPoweredOn {
             addService(enrollServiceUUID)
         } else {
             log("not powered on")
         }
     }
-
+    
+    func startAuth() {
+        log("startAuth in state \(state.description)")
+        if isPoweredOn {
+            addService(authServiceUUID)
+        } else {
+            log("not powered on")
+        }
+    }
+    
     private func addService(serviceUUID: CBUUID) {
-        log("addService \(nameFromUUID(serviceUUID))")
-        if currentServiceUUID != nil && serviceUUID == currentServiceUUID {
-            log("don't need to add service -- it is current service")
+        log("addService \(nameFromUUID(serviceUUID)) in state \(state.description)")
+        if state == .Both || (serviceUUID == enrollServiceUUID && state == .Enroll) || (serviceUUID == authServiceUUID && state == .Auth) {
+            log("service is already added")
             return
         }
-        currentServiceUUID = serviceUUID
         peripheralManager.addService(serviceUUID == enrollServiceUUID ? enrollService : authService)
-        delegate?.addedService(serviceUUID == enrollServiceUUID ? "Enroll" : "Auth")
+        if state == .Idle {
+            state = serviceUUID == enrollServiceUUID ? .Enroll : .Auth
+        } else {
+            state = .Both
+        }
+        startAdvertising()
     }
     
     private func removeService(serviceUUID: CBUUID) {
-        log("removeService \(nameFromUUID(serviceUUID))")
-        if serviceUUID == currentServiceUUID {
-            log("can't remove service -- it is current service")
+        log("removeService \(nameFromUUID(serviceUUID)) in state \(state.description)")
+        if state == .Idle || (serviceUUID == enrollServiceUUID && state == .Auth) || (serviceUUID == authServiceUUID && state == .Enroll) {
+            log("service is already removed")
             return
         }
         peripheralManager.removeService(serviceUUID == enrollServiceUUID ? enrollService : authService)
-        delegate?.removedService(serviceUUID == enrollServiceUUID ? "Enroll" : "Auth")
+        if state == .Both {
+            state = serviceUUID == enrollServiceUUID ? .Auth : .Enroll
+        } else {
+            state = .Idle
+        }
+        startAdvertising()
     }
     
     private func startAdvertising() {
-        log("startAdvertising")
-        peripheralManager.startAdvertising(nil) // [CBAdvertisementDataServiceUUIDsKey: [currentServiceUUID]])
+        if isPoweredOn {
+            peripheralManager.stopAdvertising()
+            var uuids = [CBUUID]()
+            if state == .Enroll || state == .Both {
+                uuids.append(enrollServiceUUID)
+            }
+            if state == .Auth || state == .Both {
+                uuids.append(authServiceUUID)
+            }
+            if !uuids.isEmpty {
+                peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: uuids])
+            }
+        }
     }
     
     private func processRequest(requestData: NSData) {
-        let request = NSString(data: requestData, encoding: NSUTF8StringEncoding)!
-        log("request received: " + (request as String))
-        let response = "\(request) (\(timestamp()))"
+        let request = NSString(data: requestData, encoding: NSUTF8StringEncoding)! as String
+        log("request received: \(request)")
+        var response = request.stringByReplacingOccurrencesOfString("request", withString: "response")
+        response += " [\(timestamp())]"
         log("pending response: " + response)
         pendingResponse = response
+//        if startsWith(response, "Enroll 3") {
+//            dispatch_async(dispatch_get_main_queue()) {
+//                self.addService(self.authServiceUUID)
+//            }
+//        }
     }
 
 }
@@ -152,8 +204,7 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         log("peripheralManagerDidUpdateState \(caseString)")
         isPoweredOn = (peripheralManager.state == .PoweredOn)
         if isPoweredOn {
-            // peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [currentServiceUUID]])
-            peripheralManager.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [enrollServiceUUID, authServiceUUID]])
+            startEnroll()
         }
     }
     
@@ -161,7 +212,6 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         var message = "peripheralManagerDidStartAdvertising "
         if error == nil {
             message += "ok"
-            addService(enrollServiceUUID)
         } else {
             message += "error " + error.localizedDescription
         }
@@ -196,8 +246,15 @@ extension BluetoothManager: CBPeripheralManagerDelegate {
         let characteristicName = nameFromUUID(characteristicUUID)
         log("peripheralManager didReceiveReadRequest \(serviceName) \(characteristicName)")
         if !pendingResponse.isEmpty {
+            log("pendingResponse: \(pendingResponse)")
             request.value = pendingResponse.dataUsingEncoding(NSUTF8StringEncoding, allowLossyConversion: false)
             peripheralManager.respondToRequest(request, withResult: CBATTError.Success)
+            if startsWith(pendingResponse, "Enroll 3") {
+                dispatch_async(dispatch_get_main_queue()) {
+                    self.removeService(self.enrollServiceUUID)
+                    self.addService(self.authServiceUUID)
+                }
+            }
             pendingResponse = ""
         } else {
             log("no pending responses")

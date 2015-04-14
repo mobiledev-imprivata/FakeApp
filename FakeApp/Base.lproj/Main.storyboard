@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="6751" systemVersion="14C1514" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="vXZ-lx-hvc">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="7531" systemVersion="14D131" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="vXZ-lx-hvc">
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="6736"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="7520"/>
+        <capability name="Constraints to layout margins" minToolsVersion="6.0"/>
     </dependencies>
     <scenes>
         <!--View Controller-->
@@ -23,22 +24,34 @@
                                 <nil key="highlightedColor"/>
                             </label>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="9jj-4X-IyK">
-                                <rect key="frame" x="243" y="551" width="115" height="41"/>
+                                <rect key="frame" x="16" y="551" width="59" height="41"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="24"/>
-                                <state key="normal" title="Start Enroll">
+                                <state key="normal" title="Enroll">
                                     <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
                                 </state>
                                 <connections>
-                                    <action selector="startEnroll:" destination="vXZ-lx-hvc" eventType="touchUpInside" id="pMP-mv-Vbd"/>
+                                    <action selector="enroll:" destination="vXZ-lx-hvc" eventType="touchUpInside" id="W7K-rf-6BP"/>
+                                </connections>
+                            </button>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="96B-BE-kZE">
+                                <rect key="frame" x="535" y="551" width="49" height="41"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="24"/>
+                                <state key="normal" title="Auth">
+                                    <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                                </state>
+                                <connections>
+                                    <action selector="auth:" destination="vXZ-lx-hvc" eventType="touchUpInside" id="Kg4-AC-Pte"/>
                                 </connections>
                             </button>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
                         <constraints>
-                            <constraint firstAttribute="centerX" secondItem="9jj-4X-IyK" secondAttribute="centerX" id="6uP-Nc-NL6"/>
                             <constraint firstAttribute="centerX" secondItem="7e7-wL-Xzi" secondAttribute="centerX" id="81b-f9-N9t"/>
                             <constraint firstAttribute="centerY" secondItem="7e7-wL-Xzi" secondAttribute="centerY" id="ARc-VY-rdc"/>
-                            <constraint firstItem="2fi-mo-0CV" firstAttribute="top" secondItem="9jj-4X-IyK" secondAttribute="bottom" constant="8" id="aQo-2v-laa"/>
+                            <constraint firstItem="96B-BE-kZE" firstAttribute="trailing" secondItem="kh9-bI-dsS" secondAttribute="trailingMargin" id="j5I-Fl-gAQ"/>
+                            <constraint firstItem="2fi-mo-0CV" firstAttribute="top" secondItem="9jj-4X-IyK" secondAttribute="bottom" constant="8" id="kA4-Rm-Hda"/>
+                            <constraint firstItem="9jj-4X-IyK" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leadingMargin" id="lrQ-gr-Dvm"/>
+                            <constraint firstItem="2fi-mo-0CV" firstAttribute="top" secondItem="96B-BE-kZE" secondAttribute="bottom" constant="8" id="zws-m4-dkN"/>
                         </constraints>
                     </view>
                     <connections>
